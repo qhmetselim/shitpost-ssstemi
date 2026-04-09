@@ -21,9 +21,13 @@ jobs:
           python-version: '3.10'
 
       - name: Gerekli Kütüphaneleri Yükle
+        # Artık Reddit'in kendi kütüphanesine (praw) ihtiyacımız yok, sadece requests yeterli
         run: pip install requests
 
       - name: Avcıyı Çalıştır
+        # GitHub kasasına koyduğumuz şifreyi burada koda veriyoruz
+        env:
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
         run: python scraper.py
 
       - name: Yeni Verileri Kaydet (Commit)
