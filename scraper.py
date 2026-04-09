@@ -2,7 +2,6 @@ import requests
 import json
 import os
 
-# GitHub'ın gizli kasasından RapidAPI şifremizi alıyoruz
 RAPIDAPI_KEY = os.environ.get('RAPIDAPI_KEY')
 
 url = "https://reddit34.p.rapidapi.com/getTopPostsBySubreddit"
@@ -12,7 +11,8 @@ headers = {
     "x-rapidapi-host": "reddit34.p.rapidapi.com"
 }
 
-subreddits = ['TurkeyJerky', 'ShitpostTC', 'ZargoryanGalaksisi', 'KGBTR']
+# Küçük harflerle yazmak API'lerde her zaman daha güvenlidir
+subreddits = ['turkeyjerky', 'shitposttc', 'zargoryangalaksisi', 'kgbtr']
 toplanan_postlar = []
 
 print("Gölge Bot devrede, RapidAPI üzerinden Reddit'e sızılıyor...")
@@ -20,8 +20,8 @@ print("Gölge Bot devrede, RapidAPI üzerinden Reddit'e sızılıyor...")
 for sub in subreddits:
     print(f"Bölge taranıyor: {sub}...")
     
-    # 'time' parametresi 'day' olarak ayarlandı (her gün en yeni videolar için)
-    querystring = {"subreddit": sub, "time": "day"}
+    # 'time' parametresini 'week' yaptık. Böylece garanti olarak en iyi videolar gelecek.
+    querystring = {"subreddit": sub, "time": "week"}
     
     try:
         response = requests.get(url, headers=headers, params=querystring)
@@ -29,28 +29,30 @@ for sub in subreddits:
         if response.status_code == 200:
             veri = response.json()
             
-            # Gelen veriyi güvenli bir şekilde liste olarak yakalıyoruz
+            # Tam olarak senin attığın görsele göre kutuyu açıyoruz:
             postlar = []
-            if isinstance(veri, list):
-                postlar = veri
-            elif isinstance(veri, dict):
-                postlar = veri.get('data', veri.get('posts', veri.get('children', [])))
+            if isinstance(veri, dict) and 'data' in veri and 'posts' in veri['data']:
+                postlar = veri['data']['posts']
+            
+            # Eğer API o sayfa için boş liste döndürdüyse atla
+            if not postlar:
+                print(f"Uyarı: API {sub} sayfası için 0 post döndürdü.")
+                continue
 
             for post in postlar:
-                # Video olup olmadığını tespit et
-                is_video = post.get('is_video') == True or post.get('isVideo') == True
+                # Videonun linkini yakalıyoruz
                 video_url = post.get('video_url') or post.get('media_url') or post.get('url', '')
                 
-                # Eğer gerçekten video ise listeye ekle
-                if is_video or '.mp4' in str(video_url).lower():
+                # Sadece video olanları listeye alıyoruz
+                if post.get('isVideo') == True or '.mp4' in str(video_url).lower():
                     post_verisi = {
                         "id": post.get('id', 'Bilinmiyor'),
                         "title": post.get('title', 'Başlıksız'),
                         "url": video_url,
-                        "score": post.get('score', post.get('upvotes', 0)),
+                        "score": post.get('upvotes', post.get('score', 0)),
                         "subreddit": sub
                     }
-                    if post_verisi["url"]: # Link boş değilse
+                    if post_verisi["url"]: 
                         toplanan_postlar.append(post_verisi)
                         
         else:
@@ -61,6 +63,5 @@ for sub in subreddits:
 
 print(f"Av bitti! Toplam {len(toplanan_postlar)} harika video bulundu.")
 
-# Json dosyamızı oluşturuyoruz
 with open('data.json', 'w', encoding='utf-8') as f:
     json.dump(toplanan_postlar, f, ensure_ascii=False, indent=4)
