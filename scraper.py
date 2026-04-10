@@ -3,68 +3,72 @@ import json
 import os
 
 RAPIDAPI_KEY = os.environ.get('RAPIDAPI_KEY')
-url = "https://tiktok-scraper7.p.rapidapi.com/feed/search"
+url = "https://tiktok-api23.p.rapidapi.com/api/post/trending"
 
 headers = {
     "x-rapidapi-key": RAPIDAPI_KEY,
-    "x-rapidapi-host": "tiktok-scraper7.p.rapidapi.com"
+    "x-rapidapi-host": "tiktok-api23.p.rapidapi.com"
 }
 
-# API'nin boş dönmemesi için kelimeleri en popüler ve garanti olanlarla değiştirdik!
-keywords = ["komik", "mizah", "keşfet"]
+# 16 yerine biraz daha bol alalım ki kaydıracak çok videomuz olsun
+querystring = {"count": "30"}
+
 toplanan_postlar = []
 
-print("TikTok Türkiye Avı Başlıyor...")
+print("TikTok 'Trending' radarı açıldı! Ana akım sömürülüyor...")
 
-for kelime in keywords:
-    print(f"Aranıyor: {kelime}...")
-    
-    querystring = {
-        "keywords": kelime,
-        "region": "tr",
-        "count": "15",
-        "cursor": "0",
-        "publish_time": "0",
-        "sort_type": "0"
-    }
-    
-    try:
-        response = requests.get(url, headers=headers, params=querystring)
-        if response.status_code == 200:
-            veri = response.json()
+try:
+    response = requests.get(url, headers=headers, params=querystring)
+    if response.status_code == 200:
+        veri = response.json()
+        
+        # Farklı API'lerin kutu yapılarına karşı geniş ağımız
+        videolar = []
+        if isinstance(veri, list):
+            videolar = veri
+        elif isinstance(veri, dict):
+            videolar = veri.get('data', veri.get('itemList', veri.get('videos', [])))
             
-            # Senin gönderdiğin çıktıya göre sistemi tam 'videos' klasörüne kitledik
-            videolar = veri.get('videos', [])
+        if not videolar:
+            print("Uyarı: API başarılı oldu ama video listesi boş döndü. (Servis anlık yavaş olabilir)")
             
-            if not videolar:
-                print(f"Uyarı: '{kelime}' kelimesi için sonuç bulunamadı.")
-                continue
+        for video in videolar:
+            baslik = video.get('title') or video.get('desc') or "Trend Video"
+            video_id = str(video.get('id') or video.get('video_id') or "")
             
-            for video in videolar:
-                baslik = video.get('title') or video.get('desc') or "TikTok Videosu"
-                video_id = str(video.get('video_id') or video.get('id') or "")
+            # Linki yakalamak için tüm ihtimalleri tarıyoruz
+            video_url = ""
+            
+            # İhtimal 1: Link 'video' adında ayrı bir klasördeyse
+            if 'video' in video and isinstance(video['video'], dict):
+                vid = video['video']
+                video_url = vid.get('playAddr') or vid.get('downloadAddr') or ""
+                # Bazen liste olarak gelir
+                if isinstance(video_url, list) and len(video_url) > 0:
+                    video_url = video_url[0]
+            
+            # İhtimal 2: Link direkt ana dizindeyse
+            if not video_url:
+                video_url = video.get('playUrl') or video.get('play_url') or video.get('play') or video.get('video_url') or ""
                 
-                # Bu API genelde 'play' veya 'wmplay' olarak verir
-                video_url = video.get('play') or video.get('play_url') or video.get('wmplay') or ""
+            # Eğer geçerli bir link bulduysak ve http ile başlıyorsa listeye ekle
+            if video_url and isinstance(video_url, str) and "http" in video_url:
+                post_verisi = {
+                    "id": video_id,
+                    "title": baslik,
+                    "url": video_url,
+                    "platform": "TikTok",
+                    "keyword": "trending"
+                }
+                toplanan_postlar.append(post_verisi)
                 
-                # Link geçerliyse listeye ekle
-                if video_url and "http" in video_url:
-                    post_verisi = {
-                        "id": video_id,
-                        "title": baslik,
-                        "url": video_url,
-                        "platform": "TikTok",
-                        "keyword": kelime
-                    }
-                    toplanan_postlar.append(post_verisi)
-                    
-        else:
-            print(f"Hata ({kelime}): Kod {response.status_code}")
-            
-    except Exception as e:
-        print(f"Sistemsel Hata ({kelime}): {e}")
+    else:
+        print(f"Hata: API reddetti. Kod: {response.status_code}")
+        
+except Exception as e:
+    print(f"Sistemsel Hata: {e}")
 
-print(f"TikTok Avı bitti! Toplam {len(toplanan_postlar)} video bulundu.")
+print(f"Av bitti! Toplam {len(toplanan_postlar)} trend video yakalandı.")
 
 with open('data.json', 'w', encoding='utf-8') as f:
     json.dump(toplanan_postlar, f, ensure_ascii=False, indent=4)
